@@ -430,7 +430,7 @@
                             </div>
                         </div>
 
-                        <!-- Column 2: Liver Function (6 items) -->
+                        <!-- Column 2: Liver Function (7 items) -->
                         <div class="space-y-4 liver-category rounded-2xl p-5">
                             <div class="flex items-center space-x-2 mb-4 pb-3 border-b-2 border-liver-200">
                                 <div class="w-10 h-10 rounded-xl bg-liver-100 flex items-center justify-center shadow-md">
@@ -438,7 +438,7 @@
                                 </div>
                                 <div>
                                     <h4 class="font-bold text-liver-800 text-lg">肝功能指标</h4>
-                                    <p class="text-xs text-liver-600">Liver Function (6项)</p>
+                                    <p class="text-xs text-liver-600">Liver Function (7项)</p>
                                 </div>
                             </div>
                             
@@ -467,10 +467,14 @@
                                     <label class="block text-xs font-semibold text-liver-700 mb-1 ml-1">总蛋白 (TP)</label>
                                     <input type="number" id="TP" step="0.1" class="metric-input liver-input input-field w-full px-4 py-3 rounded-xl text-slate-700 text-sm" placeholder="g/L">
                                 </div>
+                                <div class="input-wrapper">
+                                    <label class="block text-xs font-semibold text-liver-700 mb-1 ml-1">白蛋白 (ALB)</label>
+                                    <input type="number" id="ALB" step="0.1" class="metric-input liver-input input-field w-full px-4 py-3 rounded-xl text-slate-700 text-sm" placeholder="g/L">
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Column 3: Renal & Lipid (7 items) -->
+                        <!-- Column 3: Renal & Lipid (6 items) -->
                         <div class="space-y-4 renal-category rounded-2xl p-5">
                             <div class="flex items-center space-x-2 mb-4 pb-3 border-b-2 border-renal-200">
                                 <div class="w-10 h-10 rounded-xl bg-renal-100 flex items-center justify-center shadow-md">
@@ -478,15 +482,11 @@
                                 </div>
                                 <div>
                                     <h4 class="font-bold text-renal-800 text-lg">肾功能与血脂指标</h4>
-                                    <p class="text-xs text-renal-600">Renal & Lipid (7项)</p>
+                                    <p class="text-xs text-renal-600">Renal & Lipid (6项)</p>
                                 </div>
                             </div>
                             
                             <div class="space-y-3">
-                                <div class="input-wrapper">
-                                    <label class="block text-xs font-semibold text-renal-700 mb-1 ml-1">白蛋白 (ALB)</label>
-                                    <input type="number" id="ALB" step="0.1" class="metric-input renal-input input-field w-full px-4 py-3 rounded-xl text-slate-700 text-sm" placeholder="g/L">
-                                </div>
                                 <div class="input-wrapper">
                                     <label class="block text-xs font-semibold text-renal-700 mb-1 ml-1">尿素 (Urea)</label>
                                     <input type="number" id="Urea" step="0.01" class="metric-input renal-input input-field w-full px-4 py-3 rounded-xl text-slate-700 text-sm" placeholder="mmol/L">
@@ -846,6 +846,9 @@
             actual: '#3b82f6',  // 蓝色
             bio: '#f97316'      // 橙色（默认）
         };
+        
+        // 用于存储动画定时器，以便在重新计算时清除
+        let animationTimers = {};
 
         function calculateBioAge() {
             if (!validateInputs()) return;
@@ -960,9 +963,17 @@
                     ease: 'power3.out'
                 });
 
-                // Animate numbers
-                animateValue('result_bio_age', 0, bio_age, 1500);
-                animateValue('result_age_diff', 0, age_diff, 1500, true);
+                // 清除之前的动画定时器
+                if (animationTimers['bio_age']) {
+                    cancelAnimationFrame(animationTimers['bio_age']);
+                }
+                if (animationTimers['age_diff']) {
+                    cancelAnimationFrame(animationTimers['age_diff']);
+                }
+
+                // Animate numbers - 使用改进的动画函数
+                animateValue('result_bio_age', bio_age, 1500, 'bio_age');
+                animateValue('result_age_diff', age_diff, 1500, 'age_diff', true);
 
                 // Set status
                 document.getElementById('result_status').textContent = status;
@@ -987,44 +998,47 @@
             }, 1500);
         }
 
-        function animateValue(id, start, end, duration, isDiff = false) {
-            const obj = document.getElementById(id);
-            const range = end - start;
-            const minTimer = 50;
-            let stepTime = Math.abs(Math.floor(duration / range));
-            stepTime = Math.max(stepTime, minTimer);
+        // 改进的数字动画函数 - 使用requestAnimationFrame替代setInterval
+        function animateValue(elementId, endValue, duration, timerKey, isDiff = false) {
+            const obj = document.getElementById(elementId);
+            const startTime = performance.now();
+            const startValue = 0; // 始终从0开始动画
             
-            let startTime = new Date().getTime();
-            let endTime = startTime + duration;
-            let timer;
+            // 清除该元素之前的动画定时器
+            if (animationTimers[timerKey]) {
+                cancelAnimationFrame(animationTimers[timerKey]);
+            }
             
-            function run() {
-                let now = new Date().getTime();
-                let remaining = Math.max((endTime - now) / duration, 0);
-                let value = Math.round(end - (remaining * range));
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // 使用easeOutQuart缓动函数
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                const currentValue = startValue + (endValue - startValue) * easeProgress;
                 
                 if (isDiff) {
-                    const sign = value > 0 ? '+' : '';
-                    obj.textContent = sign + (value / 100).toFixed(2);
-                    obj.textContent = sign + (end * (1 - remaining)).toFixed(2);
+                    const sign = currentValue > 0 ? '+' : '';
+                    obj.textContent = sign + currentValue.toFixed(2);
                 } else {
-                    obj.textContent = (end * (1 - remaining)).toFixed(2);
+                    obj.textContent = currentValue.toFixed(2);
                 }
                 
-                if (value == end) {
-                    clearInterval(timer);
-                    // Final formatted value
+                if (progress < 1) {
+                    animationTimers[timerKey] = requestAnimationFrame(update);
+                } else {
+                    // 动画结束，确保显示最终值
                     if (isDiff) {
-                        const sign = end > 0 ? '+' : '';
-                        obj.textContent = sign + end.toFixed(2);
+                        const sign = endValue > 0 ? '+' : '';
+                        obj.textContent = sign + endValue.toFixed(2);
                     } else {
-                        obj.textContent = end.toFixed(2);
+                        obj.textContent = endValue.toFixed(2);
                     }
+                    delete animationTimers[timerKey];
                 }
             }
             
-            timer = setInterval(run, stepTime);
-            run();
+            animationTimers[timerKey] = requestAnimationFrame(update);
         }
 
         function updateChart(actualAge, bioAge, diff, bioColor) {
